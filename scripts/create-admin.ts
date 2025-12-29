@@ -1,14 +1,10 @@
 /**
  * CLI script to create the first super admin
- * Usage: npm run create-admin
- * 
- * Environment variables (set before running):
- * - ADMIN_EMAIL: Admin email address
- * - ADMIN_PASSWORD: Admin password (min 8 characters)
- * - ADMIN_NAME: Admin display name (optional)
+ * Usage: bun run create-admin
  */
 import { readFileSync } from "fs";
 import { resolve } from "path";
+import * as readline from "readline";
 
 // Load .env file manually BEFORE any other imports
 function loadEnv() {
@@ -22,7 +18,6 @@ function loadEnv() {
         if (eqIndex > 0) {
           const key = trimmed.substring(0, eqIndex);
           let value = trimmed.substring(eqIndex + 1);
-          // Remove surrounding quotes if present
           if ((value.startsWith('"') && value.endsWith('"')) || 
               (value.startsWith("'") && value.endsWith("'"))) {
             value = value.slice(1, -1);
@@ -31,16 +26,27 @@ function loadEnv() {
         }
       }
     }
-    console.log("✓ Loaded .env file");
   } catch (err) {
-    console.log("⚠ No .env file found, using existing environment variables");
+    console.log("⚠ No .env file found");
   }
 }
 
-// Load env first
 loadEnv();
 
-// Now dynamically import the modules that depend on env vars
+function prompt(question: string): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
+}
+
 async function main() {
   const { db } = await import("../src/db");
   const { superAdmins } = await import("../src/db/schema");
@@ -48,30 +54,31 @@ async function main() {
 
   const BCRYPT_COST = 12;
 
-  const email = process.env.ADMIN_EMAIL;
-  const password = process.env.ADMIN_PASSWORD;
-  const name = process.env.ADMIN_NAME || "Super Admin";
-
-  if (!email || !password) {
-    console.error("\nError: ADMIN_EMAIL and ADMIN_PASSWORD are required");
-    console.log("\nUsage:");
-    console.log("  ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=yourpassword npm run create-admin");
-    process.exit(1);
-  }
-
-  if (password.length < 8) {
-    console.error("Error: Password must be at least 8 characters");
-    process.exit(1);
-  }
-
   try {
     // Check if admin already exists
     const existing = await db.query.superAdmins.findFirst();
     
     if (existing) {
-      console.log("\nA super admin already exists. Use the admin panel to create additional admins.");
+      console.log("\n⚠ A super admin already exists.");
+      console.log("Use the admin panel to create additional admins.");
       process.exit(0);
     }
+
+    console.log("\n🔐 Create Super Admin\n");
+
+    const email = await prompt("Email: ");
+    if (!email || !email.includes("@")) {
+      console.error("\n❌ Invalid email address");
+      process.exit(1);
+    }
+
+    const password = await prompt("Password (min 8 chars): ");
+    if (!password || password.length < 8) {
+      console.error("\n❌ Password must be at least 8 characters");
+      process.exit(1);
+    }
+
+    const name = await prompt("Name (default: Super Admin): ") || "Super Admin";
 
     // Hash password
     const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
@@ -91,9 +98,9 @@ async function main() {
     console.log(`   Email: ${admin.email}`);
     console.log(`   Name: ${admin.name}`);
     console.log(`   Role: ${admin.role}`);
-    console.log("\nYou can now login at /admin/login");
+    console.log("\n🚀 Login at: http://localhost:3000/admin/login\n");
   } catch (error) {
-    console.error("Failed to create admin:", error);
+    console.error("\n❌ Failed to create admin:", error);
     process.exit(1);
   }
 

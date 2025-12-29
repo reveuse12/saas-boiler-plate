@@ -31,10 +31,10 @@ Create the first super admin user:
 bun run create-admin
 ```
 
-Follow the prompts to enter:
+You'll be prompted to enter:
 - Email
-- Password
-- Name
+- Password (minimum 8 characters)
+- Name (optional, defaults to "Super Admin")
 
 ### Step 4: Start Development
 

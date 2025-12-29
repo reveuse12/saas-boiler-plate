@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1766998653924,
+      "tag": "0000_loving_blackheart",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1767003285446,
+      "tag": "0001_tranquil_mercury",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1767010246141,
+      "tag": "0002_workable_wolf_cub",
+      "breakpoints": true
+    }
+  ]
+}

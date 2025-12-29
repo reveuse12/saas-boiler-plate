@@ -1,0 +1,168 @@
+# Implementation Plan
+
+- [ ] 1. Add database schema for super admin tables
+  - [x] 1.1 Add super_admins, admin_sessions, and audit_logs tables to schema
+    - Add table definitions to `src/db/schema.ts`
+    - Include all fields, indexes, and relations
+    - Export types for SuperAdmin, AdminSession, AuditLog
+    - _Requirements: 1.2, 5.1, 6.1_
+  - [ ] 1.2 Generate and run database migration
+    - Run drizzle-kit generate and push
+    - _Requirements: 1.2_
+
+- [ ] 2. Create admin DAL modules
+  - [x] 2.1 Create super admin DAL
+    - Create `src/lib/dal/super-admin.ts`
+    - Implement findByEmail, create, update, delete functions
+    - Implement password verification and lockout logic
+    - _Requirements: 1.2, 6.1, 7.1, 7.2_
+  - [x] 2.2 Create admin session DAL
+    - Create `src/lib/dal/admin-session.ts`
+    - Implement createSession, validateSession, deleteSession, updateActivity
+    - _Requirements: 1.2, 1.4, 7.3_
+  - [x] 2.3 Create audit log DAL
+    - Create `src/lib/dal/audit-log.ts`
+    - Implement createLog, listLogs functions
+    - _Requirements: 5.1, 5.2_
+  - [ ]* 2.4 Write property test for audit log creation
+    - **Property 5: Audit Log Creation**
+    - **Validates: Requirements 5.1**
+
+- [ ] 3. Implement admin authentication
+  - [x] 3.1 Create admin auth utilities
+    - Create `src/lib/admin-auth.ts`
+    - Implement getAdminSession, requireAdmin, requirePrimaryAdmin helpers
+    - _Requirements: 1.3, 6.4_
+  - [x] 3.2 Create admin login API route
+    - Create `src/app/api/admin/auth/login/route.ts`
+    - Validate credentials, check lockout, create session
+    - _Requirements: 1.2, 7.1_
+  - [x] 3.3 Create admin logout API route
+    - Create `src/app/api/admin/auth/logout/route.ts`
+    - Invalidate session and clear cookie
+    - _Requirements: 1.4_
+  - [x] 3.4 Create admin me API route
+    - Create `src/app/api/admin/auth/me/route.ts`
+    - Return current admin info
+    - _Requirements: 1.2_
+  - [ ]* 3.5 Write property test for account lockout
+    - **Property 8: Account Lockout**
+    - **Validates: Requirements 7.1**
+
+- [ ] 4. Create admin login page
+  - [x] 4.1 Create admin login page
+    - Create `src/app/admin/login/page.tsx`
+    - Use shadcn/ui components for form
+    - Handle login and redirect to dashboard
+    - _Requirements: 1.1_
+  - [x] 4.2 Create admin layout with auth check
+    - Create `src/app/admin/layout.tsx`
+    - Redirect unauthenticated users to login
+    - _Requirements: 1.3_
+  - [ ]* 4.3 Write property test for route protection
+    - **Property 1: Route Protection**
+    - **Validates: Requirements 1.3**
+
+- [ ] 5. Implement admin dashboard
+  - [x] 5.1 Create dashboard stats API route
+    - Create `src/app/api/admin/dashboard/stats/route.ts`
+    - Return tenant count, user count, plan distribution
+    - _Requirements: 2.1, 2.2_
+  - [x] 5.2 Create admin dashboard page
+    - Create `src/app/admin/dashboard/page.tsx`
+    - Display stats cards and plan distribution
+    - _Requirements: 2.1, 2.2_
+  - [ ]* 5.3 Write property test for plan distribution
+    - **Property 2: Tenant Plan Distribution Accuracy**
+    - **Validates: Requirements 2.2**
+
+- [ ] 6. Implement tenant management
+  - [x] 6.1 Create tenants list API route
+    - Create `src/app/api/admin/tenants/route.ts`
+    - Return paginated list of tenants with user counts
+    - _Requirements: 3.1_
+  - [x] 6.2 Create tenant detail/update/delete API routes
+    - Create `src/app/api/admin/tenants/[id]/route.ts`
+    - Implement GET, PATCH, DELETE with audit logging
+    - _Requirements: 3.2, 3.3, 3.4, 3.5_
+  - [x] 6.3 Create tenants list page
+    - Create `src/app/admin/tenants/page.tsx`
+    - Display paginated table with actions
+    - _Requirements: 3.1_
+  - [x] 6.4 Create tenant detail page
+    - Create `src/app/admin/tenants/[id]/page.tsx`
+    - Display tenant info, users, edit form, suspend/delete buttons
+    - _Requirements: 3.2, 3.3, 3.4, 3.5_
+  - [ ]* 6.5 Write property test for tenant suspension
+    - **Property 3: Tenant Suspension Blocks Login**
+    - **Validates: Requirements 3.4**
+  - [ ]* 6.6 Write property test for tenant deletion cascade
+    - **Property 4: Tenant Deletion Cascade**
+    - **Validates: Requirements 3.5**
+
+- [ ] 7. Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 8. Implement user management
+  - [x] 8.1 Create users list API route
+    - Create `src/app/api/admin/users/route.ts`
+    - Return paginated list of all users with tenant info
+    - _Requirements: 4.1_
+  - [x] 8.2 Create user detail and password reset API routes
+    - Create `src/app/api/admin/users/[id]/route.ts`
+    - Create `src/app/api/admin/users/[id]/reset-password/route.ts`
+    - _Requirements: 4.2, 4.3_
+  - [x] 8.3 Create users list page
+    - Create `src/app/admin/users/page.tsx`
+    - Display paginated table with tenant column
+    - _Requirements: 4.1_
+  - [x] 8.4 Create user detail page
+    - Create `src/app/admin/users/[id]/page.tsx`
+    - Display user info and reset password button
+    - _Requirements: 4.2, 4.3_
+
+- [ ] 9. Implement audit log viewer
+  - [x] 9.1 Create audit logs API route
+    - Create `src/app/api/admin/audit-logs/route.ts`
+    - Return paginated logs in reverse chronological order
+    - _Requirements: 5.2_
+  - [x] 9.2 Create audit logs page
+    - Create `src/app/admin/audit-logs/page.tsx`
+    - Display logs table with filtering
+    - _Requirements: 5.2_
+
+- [ ] 10. Implement super admin management
+  - [x] 10.1 Create admins list and create API routes
+    - Create `src/app/api/admin/admins/route.ts`
+    - Restrict to primary_admin role
+    - _Requirements: 6.2, 6.3, 6.4_
+  - [x] 10.2 Create admin delete API route
+    - Create `src/app/api/admin/admins/[id]/route.ts`
+    - Prevent deleting last primary admin
+    - _Requirements: 6.5_
+  - [x] 10.3 Create admins management page
+    - Create `src/app/admin/admins/page.tsx`
+    - Only accessible to primary admins
+    - _Requirements: 6.3, 6.4_
+  - [ ]* 10.4 Write property test for non-primary admin restriction
+    - **Property 6: Non-Primary Admin Restriction**
+    - **Validates: Requirements 6.4**
+  - [ ]* 10.5 Write property test for primary admin minimum
+    - **Property 7: Primary Admin Minimum**
+    - **Validates: Requirements 6.5**
+
+- [ ] 11. Add tenant suspension to auth flow
+  - [x] 11.1 Update tenant user login to check suspension
+    - Modify `src/lib/auth.ts` to check tenant.isSuspended
+    - Return error if tenant is suspended
+    - _Requirements: 3.4_
+
+- [ ] 12. Create CLI for first admin setup
+  - [x] 12.1 Create seed script for first super admin
+    - Create `scripts/create-admin.ts`
+    - Read email/password from env or prompts
+    - Create primary_admin account
+    - _Requirements: 6.2_
+
+- [ ] 13. Final Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.

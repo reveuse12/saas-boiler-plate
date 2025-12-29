@@ -1,0 +1,177 @@
+# Implementation Plan
+
+- [x] 1. Project Setup and Dependencies
+  - [x] 1.1 Restructure project to use src/ directory pattern
+    - Move app/ to src/app/
+    - Update tsconfig.json paths to use @/src/*
+    - Update next.config.ts for src directory
+    - _Requirements: 10.1, 10.4_
+  - [x] 1.2 Install core dependencies
+    - Install drizzle-orm, @auth/drizzle-adapter, next-auth@beta
+    - Install @tanstack/react-query, zustand, nuqs
+    - Install zod for validation
+    - Install fast-check for property testing
+    - _Requirements: 9.1_
+  - [x] 1.3 Install shadcn/ui and configure components
+    - Initialize shadcn/ui with default configuration
+    - Install button, input, card, sidebar, sheet components
+    - _Requirements: 5.1_
+  - [x] 1.4 Create environment configuration
+    - Create .env.example with required variables
+    - Create src/lib/env.ts for type-safe env access with Zod
+    - _Requirements: 1.3_
+
+- [x] 2. Database Schema and Connection
+  - [x] 2.1 Set up Drizzle ORM connection
+    - Create src/db/index.ts with PostgreSQL connection
+    - Create drizzle.config.ts for migrations
+    - _Requirements: 2.1_
+  - [x] 2.2 Define database schema with tenant isolation
+    - Create src/db/schema.ts with tenants, users, todos tables
+    - Define relations between tables
+    - Add indexes for performance
+    - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
+  - [ ]* 2.3 Write property test for tenant-scoped record integrity
+    - **Property 5: Tenant-Scoped Record Integrity**
+    - **Validates: Requirements 2.2**
+
+- [x] 3. Data Access Layer (DAL)
+  - [x] 3.1 Create DAL context and base utilities
+    - Create src/lib/dal/context.ts for tenant context management
+    - Create src/lib/dal/errors.ts for DAL-specific errors
+    - _Requirements: 3.5_
+  - [x] 3.2 Implement tenant DAL
+    - Create src/lib/dal/tenant.ts with getTenant, getTenantById
+    - Implement tenant lookup by slug for middleware
+    - _Requirements: 3.1_
+  - [x] 3.3 Implement todos DAL with tenant isolation
+    - Create src/lib/dal/todos.ts with CRUD operations
+    - Enforce tenantId injection on all queries
+    - _Requirements: 3.1, 3.2, 3.3_
+  - [ ]* 3.4 Write property tests for DAL isolation
+    - **Property 6: DAL Query Isolation**
+    - **Property 7: DAL Record Creation Isolation**
+    - **Property 8: Cross-Tenant Access Prevention**
+    - **Validates: Requirements 3.1, 3.2, 3.3**
+  - [ ]* 3.5 Write property test for DAL serialization
+    - **Property 9: DAL Response Serialization Round-Trip**
+    - **Validates: Requirements 3.4**
+
+- [x] 4. Authentication System
+  - [x] 4.1 Configure NextAuth.js v5
+    - Create src/lib/auth.ts with auth configuration
+    - Set up credentials provider with password verification
+    - Configure Drizzle adapter for session storage
+    - _Requirements: 4.1, 4.4_
+  - [x] 4.2 Implement session callbacks with tenant context
+    - Add jwt callback to include tenantId and role
+    - Add session callback to expose tenant data to client
+    - _Requirements: 4.1, 4.2_
+  - [x] 4.3 Create auth utilities and protected wrapper
+    - Create src/lib/auth-utils.ts with getServerSession helper
+    - Create src/components/auth/protected.tsx wrapper component
+    - _Requirements: 4.3, 4.5_
+  - [ ]* 4.4 Write property tests for authentication
+    - **Property 10: Session Structure Completeness**
+    - **Property 11: Password Verification Correctness**
+    - **Validates: Requirements 4.1, 4.2, 4.4**
+
+- [x] 5. Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 6. Multi-Tenant Middleware
+  - [x] 6.1 Implement subdomain extraction logic
+    - Create src/lib/middleware/tenant-resolver.ts
+    - Handle production domains and localhost fallback
+    - _Requirements: 1.1, 1.3_
+  - [x] 6.2 Create main middleware with routing logic
+    - Create src/middleware.ts with subdomain detection
+    - Implement URL rewriting for tenant routes
+    - Handle root domain routing to marketing
+    - _Requirements: 1.1, 1.2, 1.4_
+  - [ ]* 6.3 Write property tests for middleware
+    - **Property 1: Subdomain Extraction Consistency**
+    - **Property 2: Root Domain Routing**
+    - **Property 3: Development Mode Fallback**
+    - **Property 4: Invalid Tenant Rejection**
+    - **Validates: Requirements 1.1, 1.2, 1.3, 1.4**
+
+- [x] 7. Validation Schemas
+  - [x] 7.1 Create Zod schemas for all entities
+    - Create src/lib/validations/tenant.ts
+    - Create src/lib/validations/user.ts
+    - Create src/lib/validations/todo.ts
+    - _Requirements: 9.1, 9.3, 9.4_
+  - [ ]* 7.2 Write property test for validation errors
+    - **Property 16: Validation Error Descriptiveness**
+    - **Validates: Requirements 9.3**
+
+- [x] 8. Route Group Layouts
+  - [x] 8.1 Create marketing layout and landing page
+    - Create src/app/(marketing)/layout.tsx with navbar/footer
+    - Create src/app/(marketing)/page.tsx landing page
+    - _Requirements: 7.1, 7.2, 7.3, 7.4_
+  - [x] 8.2 Create auth layout and pages
+    - Create src/app/(auth)/layout.tsx
+    - Create src/app/(auth)/login/page.tsx
+    - Create src/app/(auth)/signup/page.tsx
+    - _Requirements: 4.3_
+  - [x] 8.3 Create platform layout with sidebar
+    - Create src/app/(platform)/layout.tsx with auth check
+    - Create src/components/platform/sidebar.tsx
+    - Create src/components/platform/mobile-nav.tsx
+    - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
+
+- [x] 9. Platform Pages
+  - [x] 9.1 Create dashboard page with RSC data fetching
+    - Create src/app/(platform)/[tenantId]/dashboard/page.tsx
+    - Create src/app/(platform)/[tenantId]/dashboard/loading.tsx
+    - Implement Suspense boundaries for loading states
+    - _Requirements: 6.1, 6.2, 6.3, 6.4_
+  - [x] 9.2 Create settings page
+    - Create src/app/(platform)/[tenantId]/settings/page.tsx
+    - _Requirements: 5.1_
+  - [ ]* 9.3 Write property test for dashboard tenant isolation
+    - **Property 12: Dashboard Tenant Data Isolation**
+    - **Validates: Requirements 6.3**
+
+- [x] 10. Optimistic UI and Mutations
+  - [x] 10.1 Set up TanStack Query provider
+    - Create src/components/providers/query-provider.tsx
+    - Configure in root layout
+    - _Requirements: 8.1_
+  - [x] 10.2 Implement todo mutations with optimistic updates
+    - Create src/hooks/use-todos.ts with useQuery and useMutation
+    - Implement optimistic add, update, delete
+    - Handle rollback on failure
+    - _Requirements: 8.1, 8.2, 8.3, 8.4_
+  - [x] 10.3 Create todo list component
+    - Create src/components/todos/todo-list.tsx
+    - Create src/components/todos/todo-item.tsx
+    - Create src/components/todos/add-todo-form.tsx
+    - _Requirements: 8.1_
+  - [ ]* 10.4 Write property tests for optimistic UI
+    - **Property 13: Optimistic Update Consistency**
+    - **Property 14: Optimistic Rollback on Failure**
+    - **Property 15: Concurrent Mutation Ordering**
+    - **Validates: Requirements 8.1, 8.2, 8.3, 8.4**
+
+- [x] 11. API Routes
+  - [x] 11.1 Create todos API routes
+    - Create src/app/api/todos/route.ts (GET, POST)
+    - Create src/app/api/todos/[id]/route.ts (PATCH, DELETE)
+    - Use DAL for all database operations
+    - _Requirements: 3.1, 3.2, 3.3_
+  - [x] 11.2 Create auth API routes
+    - Configure NextAuth route handler at src/app/api/auth/[...nextauth]/route.ts
+    - _Requirements: 4.1_
+
+- [x] 12. Kiro Steering Rules
+  - [x] 12.1 Create steering rules for project conventions
+    - Create .kiro/steering/project-structure.md
+    - Create .kiro/steering/coding-standards.md
+    - Create .kiro/steering/multi-tenancy.md
+    - _Requirements: 10.2, 10.3_
+
+- [x] 13. Final Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.

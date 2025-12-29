@@ -1,37 +1,122 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SaaS Boilerplate
+
+Multi-tenant SaaS boilerplate built with Next.js 16, featuring tenant isolation, authentication, and super admin panel.
+
+## Features
+
+- 🏢 **Multi-tenancy** - Complete tenant isolation with subdomain/path-based routing
+- 🔐 **Authentication** - NextAuth.js v5 with credentials provider
+- 👥 **User Management** - Role-based access control (Owner, Admin, Member)
+- 🛡️ **Super Admin Panel** - Platform-level management dashboard
+- 📝 **Audit Logs** - Track all admin actions
+- 🔑 **Password Reset** - Secure token-based password recovery
+- 💾 **Database** - PostgreSQL with Drizzle ORM
+- 🎨 **UI Components** - Radix UI + Tailwind CSS
+
+## Tech Stack
+
+- **Framework**: Next.js 16 (App Router)
+- **Auth**: NextAuth.js v5
+- **Database**: PostgreSQL (Neon)
+- **ORM**: Drizzle
+- **UI**: Radix UI + Tailwind CSS
+- **State**: Zustand + TanStack Query
+- **Validation**: Zod
+- **Runtime**: Bun
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Bun installed
+- PostgreSQL database (Neon recommended)
+
+### Installation
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Install dependencies
+bun install
+
+# Set up environment variables
+cp .env.example .env
+
+# Run database migrations
+bun run db:push
+
+# Create super admin
+bun run create-admin
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Environment Variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```env
+DATABASE_URL=postgresql://...
+NEXTAUTH_SECRET=your-secret
+NEXTAUTH_URL=http://localhost:3000
+PROTOCOL=http
+ROOT_DOMAIN=localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Development
 
-## Learn More
+```bash
+bun run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+Open [http://localhost:3000](http://localhost:3000)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Build
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+bun run build
+bun run start
+```
 
-## Deploy on Vercel
+## Project Structure
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```
+src/
+├── app/                    # Next.js app router
+│   ├── (auth)/            # Auth pages (login, signup, etc.)
+│   ├── (platform)/        # Tenant-scoped pages
+│   ├── admin/             # Super admin panel
+│   └── api/               # API routes
+├── components/            # React components
+├── db/                    # Database schema
+├── lib/
+│   ├── dal/              # Data access layer
+│   ├── middleware/       # Custom middleware
+│   └── validations/      # Zod schemas
+└── hooks/                # Custom React hooks
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-# saas-boiler-plate
+## Key Features
+
+### Multi-Tenancy
+- Tenant isolation at database level
+- Subdomain or path-based routing
+- Tenant-specific user management
+
+### Authentication
+- Secure credential-based auth
+- Session management with JWT
+- Password reset flow
+- Protected routes
+
+### Super Admin Panel
+- Manage all tenants
+- User administration
+- Audit log tracking
+- Platform statistics
+
+## Scripts
+
+- `bun run dev` - Start development server
+- `bun run build` - Build for production
+- `bun run start` - Start production server
+- `bun run lint` - Run ESLint
+- `bun run create-admin` - Create super admin user
+
+## License
+
+MIT

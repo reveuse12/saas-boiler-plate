@@ -3,13 +3,14 @@
  * Handles all super admin CRUD operations with security features
  */
 import { db } from "@/db";
-import { superAdmins, type SuperAdmin, type NewSuperAdmin } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { superAdmins, adminSetupTokens, type SuperAdmin } from "@/db/schema";
+import { eq, and, gt } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
 const BCRYPT_COST = 12;
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 30 * 60 * 1000; // 30 minutes
+const SETUP_TOKEN_EXPIRY_HOURS = 48;
 
 export async function findByEmail(email: string): Promise<SuperAdmin | null> {
   const result = await db.query.superAdmins.findFirst({
@@ -34,10 +35,12 @@ export async function listAll(): Promise<SuperAdmin[]> {
 export async function create(data: {
   email: string;
   name: string;
-  password: string;
+  password?: string;
   role: "primary_admin" | "admin";
 }): Promise<SuperAdmin> {
-  const passwordHash = await bcrypt.hash(data.password, BCRYPT_COST);
+  const passwordHash = data.password 
+    ? await bcrypt.hash(data.password, BCRYPT_COST)
+    : null;
   
   const [admin] = await db
     .insert(superAdmins)
@@ -56,6 +59,7 @@ export async function verifyPassword(
   admin: SuperAdmin,
   password: string
 ): Promise<boolean> {
+  if (!admin.passwordHash) return false;
   return bcrypt.compare(password, admin.passwordHash);
 }
 
@@ -141,4 +145,87 @@ export async function changePassword(
       updatedAt: new Date(),
     })
     .where(eq(superAdmins.id, id));
+}
+
+
+// ============================================================================
+// SETUP TOKEN FUNCTIONS
+// ============================================================================
+
+/**
+ * Create a setup token for a new admin to set their password
+ */
+export async function createSetupToken(adminId: string): Promise<string> {
+  const token = crypto.randomUUID();
+  const expiresAt = new Date();
+  expiresAt.setHours(expiresAt.getHours() + SETUP_TOKEN_EXPIRY_HOURS);
+
+  await db.insert(adminSetupTokens).values({
+    adminId,
+    token,
+    expiresAt,
+  });
+
+  return token;
+}
+
+/**
+ * Get valid setup token with admin info
+ */
+export async function getValidSetupToken(token: string): Promise<{
+  tokenId: string;
+  adminId: string;
+  admin: SuperAdmin;
+} | null> {
+  const result = await db.query.adminSetupTokens.findFirst({
+    where: and(
+      eq(adminSetupTokens.token, token),
+      gt(adminSetupTokens.expiresAt, new Date())
+    ),
+    with: {
+      admin: true,
+    },
+  });
+
+  if (!result || result.usedAt) return null;
+
+  return {
+    tokenId: result.id,
+    adminId: result.adminId,
+    admin: result.admin,
+  };
+}
+
+/**
+ * Complete admin setup - set password and mark token as used
+ */
+export async function completeSetup(
+  tokenId: string,
+  adminId: string,
+  password: string
+): Promise<void> {
+  const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
+
+  // Update admin with password
+  await db
+    .update(superAdmins)
+    .set({
+      passwordHash,
+      updatedAt: new Date(),
+    })
+    .where(eq(superAdmins.id, adminId));
+
+  // Mark token as used
+  await db
+    .update(adminSetupTokens)
+    .set({ usedAt: new Date() })
+    .where(eq(adminSetupTokens.id, tokenId));
+}
+
+/**
+ * Check if admin has completed setup (has password)
+ */
+export async function hasCompletedSetup(adminId: string): Promise<boolean> {
+  const admin = await findById(adminId);
+  return !!admin?.passwordHash;
 }

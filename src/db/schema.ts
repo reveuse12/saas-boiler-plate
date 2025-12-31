@@ -21,6 +21,7 @@ import {
 export const planEnum = pgEnum("plan", ["free", "pro", "enterprise"]);
 export const roleEnum = pgEnum("role", ["owner", "admin", "member"]);
 export const superAdminRoleEnum = pgEnum("super_admin_role", ["primary_admin", "admin"]);
+export const invitationStatusEnum = pgEnum("invitation_status", ["pending", "accepted", "expired", "revoked"]);
 
 // ============================================================================
 // TENANTS TABLE
@@ -105,6 +106,37 @@ export const todos = pgTable(
 );
 
 // ============================================================================
+// INVITATIONS TABLE
+// ============================================================================
+
+export const invitations = pgTable(
+  "invitations",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    email: text("email").notNull(),
+    role: roleEnum("role").notNull().default("member"),
+    token: text("token").notNull(),
+    status: invitationStatusEnum("status").notNull().default("pending"),
+    tenantId: text("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    invitedById: text("invited_by_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    expiresAt: timestamp("expires_at").notNull(),
+    acceptedAt: timestamp("accepted_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("invitations_tenant_idx").on(table.tenantId),
+    index("invitations_email_idx").on(table.email),
+    uniqueIndex("invitations_token_idx").on(table.token),
+  ]
+);
+
+// ============================================================================
 // PASSWORD RESET TOKENS TABLE
 // ============================================================================
 
@@ -145,7 +177,7 @@ export const superAdmins = pgTable(
       .$defaultFn(() => crypto.randomUUID()),
     email: text("email").notNull(),
     name: text("name").notNull(),
-    passwordHash: text("password_hash").notNull(),
+    passwordHash: text("password_hash"), // Nullable - set when admin completes setup
     role: superAdminRoleEnum("role").notNull().default("admin"),
     isActive: boolean("is_active").notNull().default(true),
     failedLoginAttempts: integer("failed_login_attempts").notNull().default(0),
@@ -179,6 +211,30 @@ export const adminSessions = pgTable(
   ]
 );
 
+// ============================================================================
+// ADMIN SETUP TOKENS TABLE (for new admin password setup)
+// ============================================================================
+
+export const adminSetupTokens = pgTable(
+  "admin_setup_tokens",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    adminId: text("admin_id")
+      .notNull()
+      .references(() => superAdmins.id, { onDelete: "cascade" }),
+    token: text("token").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    usedAt: timestamp("used_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("admin_setup_tokens_token_idx").on(table.token),
+    index("admin_setup_tokens_admin_idx").on(table.adminId),
+  ]
+);
+
 export const auditLogs = pgTable(
   "audit_logs",
   {
@@ -207,6 +263,7 @@ export const tenantsRelations = relations(tenants, ({ many }) => ({
   users: many(users),
   todos: many(todos),
   passwordResetTokens: many(passwordResetTokens),
+  invitations: many(invitations),
 }));
 
 export const usersRelations = relations(users, ({ one, many }) => ({
@@ -216,6 +273,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   }),
   todos: many(todos),
   passwordResetTokens: many(passwordResetTokens),
+  sentInvitations: many(invitations),
 }));
 
 export const todosRelations = relations(todos, ({ one }) => ({
@@ -240,13 +298,32 @@ export const passwordResetTokensRelations = relations(passwordResetTokens, ({ on
   }),
 }));
 
+export const invitationsRelations = relations(invitations, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [invitations.tenantId],
+    references: [tenants.id],
+  }),
+  invitedBy: one(users, {
+    fields: [invitations.invitedById],
+    references: [users.id],
+  }),
+}));
+
 export const superAdminsRelations = relations(superAdmins, ({ many }) => ({
   sessions: many(adminSessions),
+  setupTokens: many(adminSetupTokens),
 }));
 
 export const adminSessionsRelations = relations(adminSessions, ({ one }) => ({
   admin: one(superAdmins, {
     fields: [adminSessions.adminId],
+    references: [superAdmins.id],
+  }),
+}));
+
+export const adminSetupTokensRelations = relations(adminSetupTokens, ({ one }) => ({
+  admin: one(superAdmins, {
+    fields: [adminSetupTokens.adminId],
     references: [superAdmins.id],
   }),
 }));
@@ -275,3 +352,9 @@ export type NewAdminSession = typeof adminSessions.$inferInsert;
 
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type NewAuditLog = typeof auditLogs.$inferInsert;
+
+export type Invitation = typeof invitations.$inferSelect;
+export type NewInvitation = typeof invitations.$inferInsert;
+
+export type AdminSetupToken = typeof adminSetupTokens.$inferSelect;
+export type NewAdminSetupToken = typeof adminSetupTokens.$inferInsert;

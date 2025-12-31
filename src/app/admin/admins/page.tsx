@@ -24,6 +24,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -40,7 +41,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Plus, Trash2, Mail, CheckCircle, Clock } from "lucide-react";
+import { toast } from "sonner";
 
 interface Admin {
   id: string;
@@ -48,6 +50,7 @@ interface Admin {
   name: string;
   role: "primary_admin" | "admin";
   isActive: boolean;
+  hasCompletedSetup: boolean;
   lastLoginAt: string | null;
   createdAt: string;
 }
@@ -56,14 +59,12 @@ export default function AdminsManagementPage() {
   const [admins, setAdmins] = useState<Admin[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
 
   // New admin form
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [newEmail, setNewEmail] = useState("");
   const [newName, setNewName] = useState("");
-  const [newPassword, setNewPassword] = useState("");
   const [newRole, setNewRole] = useState<"primary_admin" | "admin">("admin");
 
   const fetchAdmins = async () => {
@@ -99,25 +100,33 @@ export default function AdminsManagementPage() {
         body: JSON.stringify({
           email: newEmail,
           name: newName,
-          password: newPassword,
           role: newRole,
         }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        const data = await response.json();
         throw new Error(data.error || "Failed to create admin");
       }
 
-      setSuccess("Admin created successfully");
+      if (data.emailSent) {
+        toast.success(`Setup email sent to ${newEmail}`);
+      } else {
+        toast.warning("Admin created but email failed to send");
+        // In dev mode, show the setup URL
+        if (data._devSetupUrl) {
+          console.log("Dev setup URL:", data._devSetupUrl);
+        }
+      }
+
       setIsDialogOpen(false);
       setNewEmail("");
       setNewName("");
-      setNewPassword("");
       setNewRole("admin");
       fetchAdmins();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create admin");
+      toast.error(err instanceof Error ? err.message : "Failed to create admin");
     } finally {
       setIsCreating(false);
     }
@@ -135,10 +144,10 @@ export default function AdminsManagementPage() {
         throw new Error(data.error || "Failed to delete admin");
       }
 
-      setSuccess("Admin deleted successfully");
+      toast.success("Admin deleted successfully");
       fetchAdmins();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete admin");
+      toast.error(err instanceof Error ? err.message : "Failed to delete admin");
     }
   };
 
@@ -171,7 +180,10 @@ export default function AdminsManagementPage() {
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Create New Admin</DialogTitle>
+              <DialogTitle>Invite New Admin</DialogTitle>
+              <DialogDescription>
+                They&apos;ll receive an email to set up their password.
+              </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleCreate} className="space-y-4">
               <div className="space-y-2">
@@ -181,6 +193,7 @@ export default function AdminsManagementPage() {
                   type="email"
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
+                  placeholder="admin@example.com"
                   required
                 />
               </div>
@@ -190,18 +203,8 @@ export default function AdminsManagementPage() {
                   id="name"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
+                  placeholder="John Doe"
                   required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  required
-                  minLength={8}
                 />
               </div>
               <div className="space-y-2">
@@ -215,15 +218,21 @@ export default function AdminsManagementPage() {
                     <SelectItem value="primary_admin">Primary Admin</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">
+                  Primary admins can manage other admins.
+                </p>
               </div>
               <Button type="submit" className="w-full" disabled={isCreating}>
                 {isCreating ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating...
+                    Sending invite...
                   </>
                 ) : (
-                  "Create Admin"
+                  <>
+                    <Mail className="mr-2 h-4 w-4" />
+                    Send Invite
+                  </>
                 )}
               </Button>
             </form>
@@ -234,12 +243,6 @@ export default function AdminsManagementPage() {
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      {success && (
-        <Alert>
-          <AlertDescription>{success}</AlertDescription>
         </Alert>
       )}
 
@@ -272,8 +275,16 @@ export default function AdminsManagementPage() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {admin.isActive ? (
-                      <Badge variant="secondary">Active</Badge>
+                    {!admin.hasCompletedSetup ? (
+                      <Badge variant="outline" className="gap-1">
+                        <Clock className="h-3 w-3" />
+                        Pending Setup
+                      </Badge>
+                    ) : admin.isActive ? (
+                      <Badge variant="secondary" className="gap-1">
+                        <CheckCircle className="h-3 w-3" />
+                        Active
+                      </Badge>
                     ) : (
                       <Badge variant="destructive">Inactive</Badge>
                     )}

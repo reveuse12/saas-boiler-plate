@@ -11,6 +11,7 @@ export * from "./errors";
 export * as tenantDAL from "./tenant";
 export * as todosDAL from "./todos";
 export * as passwordResetDAL from "./password-reset";
+export * as invitationsDAL from "./invitations";
 
 // Super Admin DAL modules (platform-level, not tenant-scoped)
 export * as superAdminDAL from "./super-admin";

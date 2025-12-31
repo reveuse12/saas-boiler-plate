@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAdminSession } from "@/lib/admin-auth";
 import { superAdminDAL, auditLogDAL } from "@/lib/dal";
+import { sendEmail } from "@/lib/email";
+import { adminSetupEmail } from "@/lib/email/templates";
+import { env } from "@/lib/env";
 
 const createAdminSchema = z.object({
   email: z.string().email("Invalid email address"),
   name: z.string().min(1, "Name is required"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
   role: z.enum(["primary_admin", "admin"]),
 });
 
@@ -30,13 +32,14 @@ export async function GET() {
 
     const admins = await superAdminDAL.listAll();
 
-    // Remove sensitive fields
+    // Remove sensitive fields, add setup status
     const safeAdmins = admins.map((admin) => ({
       id: admin.id,
       email: admin.email,
       name: admin.name,
       role: admin.role,
       isActive: admin.isActive,
+      hasCompletedSetup: !!admin.passwordHash,
       lastLoginAt: admin.lastLoginAt,
       createdAt: admin.createdAt,
     }));
@@ -88,7 +91,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const admin = await superAdminDAL.create(parsed.data);
+    // Create admin without password
+    const admin = await superAdminDAL.create({
+      email: parsed.data.email,
+      name: parsed.data.name,
+      role: parsed.data.role,
+    });
+
+    // Create setup token
+    const setupToken = await superAdminDAL.createSetupToken(admin.id);
+
+    // Build setup URL
+    const setupUrl = `${env.PROTOCOL}://${env.ROOT_DOMAIN}/admin/setup?token=${setupToken}`;
+
+    // Send setup email
+    const emailContent = adminSetupEmail({
+      adminName: admin.name,
+      inviterName: context.admin.name,
+      role: admin.role === "primary_admin" ? "Primary Admin" : "Admin",
+      setupUrl,
+      expiresIn: "48 hours",
+    });
+
+    const emailResult = await sendEmail({
+      to: admin.email,
+      subject: "Set up your admin account",
+      html: emailContent.html,
+      text: emailContent.text,
+    });
 
     await auditLogDAL.createLog({
       adminId: context.admin.id,
@@ -106,6 +136,11 @@ export async function POST(request: NextRequest) {
         name: admin.name,
         role: admin.role,
       },
+      emailSent: emailResult.success,
+      // In dev, return setup URL if email fails
+      ...(process.env.NODE_ENV === "development" && !emailResult.success && {
+        _devSetupUrl: setupUrl,
+      }),
     });
   } catch (error) {
     console.error("Create admin error:", error);

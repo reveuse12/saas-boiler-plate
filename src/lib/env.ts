@@ -16,6 +16,13 @@ const envSchema = z.object({
   ROOT_DOMAIN: z.string().default("localhost:3000"),
   PROTOCOL: z.enum(["http", "https"]).default("http"),
 
+  // Email (SMTP)
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.string().optional(),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  EMAIL_FROM: z.string().optional(),
+
   // Environment
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 });

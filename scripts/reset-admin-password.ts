@@ -1,6 +1,6 @@
 /**
- * CLI script to create the first super admin
- * Usage: bun run create-admin
+ * CLI script to reset super admin password
+ * Usage: bun run reset-admin-password
  */
 import { readFileSync } from "fs";
 import { resolve } from "path";
@@ -21,8 +21,10 @@ function loadEnv() {
           if (eqIndex > 0) {
             const key = trimmed.substring(0, eqIndex);
             let value = trimmed.substring(eqIndex + 1);
-            if ((value.startsWith('"') && value.endsWith('"')) || 
-                (value.startsWith("'") && value.endsWith("'"))) {
+            if (
+              (value.startsWith('"') && value.endsWith('"')) ||
+              (value.startsWith("'") && value.endsWith("'"))
+            ) {
               value = value.slice(1, -1);
             }
             process.env[key] = value;
@@ -57,57 +59,70 @@ function prompt(question: string): Promise<string> {
 async function main() {
   const { db } = await import("../src/db");
   const { superAdmins } = await import("../src/db/schema");
+  const { eq } = await import("drizzle-orm");
   const bcrypt = await import("bcryptjs");
 
   const BCRYPT_COST = 12;
 
   try {
-    // Check if admin already exists
-    const existing = await db.query.superAdmins.findFirst();
-    
-    if (existing) {
-      console.log("\n⚠ A super admin already exists.");
-      console.log("Use the admin panel to create additional admins.");
-      process.exit(0);
-    }
+    // List all admins
+    const admins = await db.query.superAdmins.findMany({
+      columns: { id: true, email: true, name: true, role: true },
+    });
 
-    console.log("\n🔐 Create Super Admin\n");
-
-    const email = await prompt("Email: ");
-    if (!email || !email.includes("@")) {
-      console.error("\n❌ Invalid email address");
+    if (admins.length === 0) {
+      console.log("\n❌ No super admins found. Run 'bun run create-admin' first.");
       process.exit(1);
     }
 
-    const password = await prompt("Password (min 8 chars): ");
+    console.log("\n🔐 Reset Super Admin Password\n");
+    console.log("Available admins:");
+    admins.forEach((admin, i) => {
+      console.log(`  ${i + 1}. ${admin.email} (${admin.name}) - ${admin.role}`);
+    });
+
+    const selection = await prompt("\nSelect admin number: ");
+    const index = parseInt(selection, 10) - 1;
+
+    if (isNaN(index) || index < 0 || index >= admins.length) {
+      console.error("\n❌ Invalid selection");
+      process.exit(1);
+    }
+
+    const selectedAdmin = admins[index];
+    console.log(`\nResetting password for: ${selectedAdmin.email}`);
+
+    const password = await prompt("New password (min 8 chars): ");
     if (!password || password.length < 8) {
       console.error("\n❌ Password must be at least 8 characters");
       process.exit(1);
     }
 
-    const name = await prompt("Name (default: Super Admin): ") || "Super Admin";
+    const confirmPassword = await prompt("Confirm password: ");
+    if (password !== confirmPassword) {
+      console.error("\n❌ Passwords do not match");
+      process.exit(1);
+    }
 
     // Hash password
     const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
 
-    // Create primary admin
-    const [admin] = await db
-      .insert(superAdmins)
-      .values({
-        email: email.toLowerCase(),
-        name,
+    // Update password
+    await db
+      .update(superAdmins)
+      .set({
         passwordHash,
-        role: "primary_admin",
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+        updatedAt: new Date(),
       })
-      .returning();
+      .where(eq(superAdmins.id, selectedAdmin.id));
 
-    console.log("\n✅ Super admin created successfully!");
-    console.log(`   Email: ${admin.email}`);
-    console.log(`   Name: ${admin.name}`);
-    console.log(`   Role: ${admin.role}`);
+    console.log("\n✅ Password reset successfully!");
+    console.log(`   Email: ${selectedAdmin.email}`);
     console.log("\n🚀 Login at: http://localhost:3000/admin/login\n");
   } catch (error) {
-    console.error("\n❌ Failed to create admin:", error);
+    console.error("\n❌ Failed to reset password:", error);
     process.exit(1);
   }
 

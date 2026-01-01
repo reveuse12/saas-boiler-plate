@@ -2,13 +2,16 @@
  * NextAuth.js v5 Configuration
  * Includes tenant-aware session callbacks
  */
-import NextAuth, { DefaultSession } from "next-auth";
+import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import Google from "next-auth/providers/google";
 import { compare } from "bcryptjs";
 import { eq, and } from "drizzle-orm";
+import { cookies } from "next/headers";
 import { db } from "@/db";
 import { users, tenants } from "@/db/schema";
 import { env, isDev, isLocalhost } from "@/lib/env";
+import { findAccountByProvider, linkAccount } from "@/lib/dal/accounts";
 
 // Extend the built-in session types
 declare module "next-auth" {
@@ -36,6 +39,22 @@ declare module "next-auth" {
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
+    // Google OAuth provider (optional - only enabled if credentials are configured)
+    ...(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
+      ? [
+          Google({
+            clientId: env.GOOGLE_CLIENT_ID,
+            clientSecret: env.GOOGLE_CLIENT_SECRET,
+            authorization: {
+              params: {
+                prompt: "consent",
+                access_type: "offline",
+                response_type: "code",
+              },
+            },
+          }),
+        ]
+      : []),
     Credentials({
       name: "credentials",
       credentials: {
@@ -78,6 +97,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           return null;
         }
 
+        // Check if user has a password (OAuth-only users don't)
+        if (!user.passwordHash) {
+          throw new Error("OAuthOnlyUser");
+        }
+
         // Verify password
         const isValid = await compare(password, user.passwordHash);
         if (!isValid) {
@@ -96,6 +120,153 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
+    /**
+     * SignIn callback - handles OAuth account linking and tenant context
+     * For OAuth providers, extracts tenant from cookie and handles user creation/linking
+     */
+    async signIn({ user, account, profile }) {
+      // Skip for credentials provider - already handled in authorize
+      if (account?.provider === "credentials") {
+        return true;
+      }
+
+      // Handle OAuth providers (Google)
+      if (account?.provider === "google") {
+        // Check if user denied consent (no profile or email)
+        if (!profile?.email) {
+          console.error("OAuth consent denied or no email provided");
+          return `/login?error=OAuthAccessDenied`;
+        }
+
+        try {
+          // Extract tenant context from cookie (set before OAuth redirect)
+          const cookieStore = await cookies();
+          const tenantSlug = cookieStore.get("oauth_tenant_slug")?.value;
+
+          if (!tenantSlug) {
+            console.error("OAuth tenant context missing from cookie");
+            return `/login?error=InvalidState`;
+          }
+
+          // Find tenant by slug
+          const tenant = await db.query.tenants.findFirst({
+            where: eq(tenants.slug, tenantSlug),
+          });
+
+          if (!tenant) {
+            console.error("Tenant not found:", tenantSlug);
+            return `/login?error=TenantNotFound`;
+          }
+
+          // Check if tenant is suspended
+          if (tenant.isSuspended) {
+            console.error("Tenant is suspended:", tenantSlug);
+            return `/login?error=TenantSuspended`;
+          }
+
+          // Check if this Google account is already linked to a different user
+          const existingAccount = await findAccountByProvider(
+            account.provider,
+            account.providerAccountId
+          );
+
+          if (existingAccount) {
+            // Account already linked - find the user and verify tenant
+            const existingUser = await db.query.users.findFirst({
+              where: eq(users.id, existingAccount.userId),
+            });
+
+            if (existingUser && existingUser.tenantId !== tenant.id) {
+              // Google account is linked to a user in a different tenant
+              return `/login?error=AccountLinkedToOtherTenant`;
+            }
+
+            if (existingUser) {
+              // User exists with linked account - populate user object for session
+              user.id = existingUser.id;
+              user.email = existingUser.email;
+              user.name = existingUser.name;
+              user.role = existingUser.role;
+              user.tenantId = existingUser.tenantId;
+              user.tenantSlug = tenant.slug;
+              return true;
+            }
+          }
+
+          // Find existing user by email in this tenant
+          const existingUser = await db.query.users.findFirst({
+            where: and(
+              eq(users.email, profile.email),
+              eq(users.tenantId, tenant.id)
+            ),
+          });
+
+          if (existingUser) {
+            // Link Google account to existing user
+            await linkAccount(existingUser.id, {
+              type: "oauth",
+              provider: account.provider,
+              providerAccountId: account.providerAccountId,
+              refresh_token: account.refresh_token,
+              access_token: account.access_token,
+              expires_at: account.expires_at,
+              token_type: account.token_type,
+              scope: account.scope,
+              id_token: account.id_token,
+            });
+
+            // Populate user object for session
+            user.id = existingUser.id;
+            user.email = existingUser.email;
+            user.name = existingUser.name;
+            user.role = existingUser.role;
+            user.tenantId = existingUser.tenantId;
+            user.tenantSlug = tenant.slug;
+            return true;
+          }
+
+          // Create new user for this tenant
+          const [newUser] = await db
+            .insert(users)
+            .values({
+              email: profile.email,
+              name: profile.name || profile.email.split("@")[0],
+              passwordHash: null, // OAuth-only user
+              role: "member",
+              tenantId: tenant.id,
+            })
+            .returning();
+
+          // Link Google account to new user
+          await linkAccount(newUser.id, {
+            type: "oauth",
+            provider: account.provider,
+            providerAccountId: account.providerAccountId,
+            refresh_token: account.refresh_token,
+            access_token: account.access_token,
+            expires_at: account.expires_at,
+            token_type: account.token_type,
+            scope: account.scope,
+            id_token: account.id_token,
+          });
+
+          // Populate user object for session
+          user.id = newUser.id;
+          user.email = newUser.email;
+          user.name = newUser.name;
+          user.role = newUser.role;
+          user.tenantId = newUser.tenantId;
+          user.tenantSlug = tenant.slug;
+          return true;
+        } catch (error) {
+          console.error("OAuth sign-in error:", error);
+          return `/login?error=OAuthError`;
+        }
+      }
+
+      return true;
+    },
+
     /**
      * Redirect callback - handles post-login redirect to tenant subdomain
      */

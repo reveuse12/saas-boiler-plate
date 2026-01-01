@@ -58,7 +58,7 @@ export const users = pgTable(
       .$defaultFn(() => crypto.randomUUID()),
     email: text("email").notNull(),
     name: text("name").notNull(),
-    passwordHash: text("password_hash").notNull(),
+    passwordHash: text("password_hash"), // Nullable for OAuth-only users
     role: roleEnum("role").notNull().default("member"),
     tenantId: text("tenant_id")
       .notNull()
@@ -256,6 +256,36 @@ export const auditLogs = pgTable(
 );
 
 // ============================================================================
+// ACCOUNTS TABLE (OAuth provider connections)
+// ============================================================================
+
+export const accounts = pgTable(
+  "accounts",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: text("type").notNull(), // "oauth" | "credentials"
+    provider: text("provider").notNull(), // "google" | "credentials"
+    providerAccountId: text("provider_account_id").notNull(),
+    refresh_token: text("refresh_token"),
+    access_token: text("access_token"),
+    expires_at: integer("expires_at"),
+    token_type: text("token_type"),
+    scope: text("scope"),
+    id_token: text("id_token"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("accounts_provider_account_idx").on(table.provider, table.providerAccountId),
+    index("accounts_user_idx").on(table.userId),
+  ]
+);
+
+// ============================================================================
 // RELATIONS
 // ============================================================================
 
@@ -274,6 +304,14 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   todos: many(todos),
   passwordResetTokens: many(passwordResetTokens),
   sentInvitations: many(invitations),
+  accounts: many(accounts),
+}));
+
+export const accountsRelations = relations(accounts, ({ one }) => ({
+  user: one(users, {
+    fields: [accounts.userId],
+    references: [users.id],
+  }),
 }));
 
 export const todosRelations = relations(todos, ({ one }) => ({
@@ -358,3 +396,6 @@ export type NewInvitation = typeof invitations.$inferInsert;
 
 export type AdminSetupToken = typeof adminSetupTokens.$inferSelect;
 export type NewAdminSetupToken = typeof adminSetupTokens.$inferInsert;
+
+export type Account = typeof accounts.$inferSelect;
+export type NewAccount = typeof accounts.$inferInsert;

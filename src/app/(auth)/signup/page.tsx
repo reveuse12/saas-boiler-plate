@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { GoogleAuthButton } from "@/components/auth/google-auth-button";
+import { OAuthSeparator } from "@/components/auth/oauth-separator";
 
 interface FieldErrors {
   [key: string]: string[];
@@ -103,38 +105,6 @@ export default function SignupPage() {
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="name">Your Name</Label>
-            <Input
-              id="name"
-              name="name"
-              type="text"
-              value={formData.name}
-              onChange={handleChange}
-              placeholder="John Doe"
-              required
-            />
-            {getFieldError("name") && (
-              <p className="text-xs text-destructive">{getFieldError("name")}</p>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="you@example.com"
-              required
-            />
-            {getFieldError("email") && (
-              <p className="text-xs text-destructive">{getFieldError("email")}</p>
-            )}
-          </div>
-
-          <div className="space-y-2">
             <Label htmlFor="tenantName">Organization Name</Label>
             <Input
               id="tenantName"
@@ -169,6 +139,50 @@ export default function SignupPage() {
             </div>
             {getFieldError("tenantSlug") && (
               <p className="text-xs text-destructive">{getFieldError("tenantSlug")}</p>
+            )}
+          </div>
+
+          {formData.tenantSlug && (
+            <>
+              <GoogleAuthButton
+                mode="signup"
+                tenantSlug={formData.tenantSlug}
+                callbackUrl={`/${formData.tenantSlug}/dashboard`}
+              />
+
+              <OAuthSeparator text="or continue with email" />
+            </>
+          )}
+
+          <div className="space-y-2">
+            <Label htmlFor="name">Your Name</Label>
+            <Input
+              id="name"
+              name="name"
+              type="text"
+              value={formData.name}
+              onChange={handleChange}
+              placeholder="John Doe"
+              required
+            />
+            {getFieldError("name") && (
+              <p className="text-xs text-destructive">{getFieldError("name")}</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              value={formData.email}
+              onChange={handleChange}
+              placeholder="you@example.com"
+              required
+            />
+            {getFieldError("email") && (
+              <p className="text-xs text-destructive">{getFieldError("email")}</p>
             )}
           </div>
 

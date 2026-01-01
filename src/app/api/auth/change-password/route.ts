@@ -39,6 +39,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    // Check if user has a password (OAuth-only users don't have one)
+    if (!user.passwordHash) {
+      return NextResponse.json(
+        { error: "Cannot change password for OAuth-only accounts. Please set a password first." },
+        { status: 400 }
+      );
+    }
+
     // Verify current password
     const isValid = await compare(currentPassword, user.passwordHash);
     if (!isValid) {

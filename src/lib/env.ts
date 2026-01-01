@@ -12,6 +12,10 @@ const envSchema = z.object({
   AUTH_SECRET: z.string().min(32),
   AUTH_URL: z.string().url().optional(),
 
+  // Google OAuth
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+
   // Multi-tenancy
   ROOT_DOMAIN: z.string().default("localhost:3000"),
   PROTOCOL: z.enum(["http", "https"]).default("http"),

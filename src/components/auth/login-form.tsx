@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
@@ -9,16 +9,53 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { GoogleAuthButton } from "@/components/auth/google-auth-button";
+import { OAuthSeparator } from "@/components/auth/oauth-separator";
+
+/**
+ * Maps OAuth error codes to user-friendly messages
+ */
+const OAUTH_ERROR_MESSAGES: Record<string, string> = {
+  OAuthAccessDenied: "Google sign-in was cancelled. Please try again.",
+  InvalidState: "Authentication failed. Please try again.",
+  TenantNotFound: "Organization not found. Please check your organization name.",
+  TenantSuspended: "This organization has been suspended. Please contact support.",
+  AccountLinkedToOtherTenant: "This Google account is already linked to another organization.",
+  OAuthError: "Unable to connect to Google. Please try again.",
+  OAuthCallback: "Authentication failed. Please try again.",
+  OAuthSignin: "Unable to start Google sign-in. Please try again.",
+  OAuthAccountNotLinked: "This email is already registered. Please sign in with your password.",
+  AccessDenied: "Access denied. Please try again.",
+  Verification: "The verification link has expired. Please try again.",
+  Default: "An authentication error occurred. Please try again.",
+};
+
+/**
+ * Gets a user-friendly error message for an OAuth error code
+ */
+function getOAuthErrorMessage(errorCode: string | null): string | null {
+  if (!errorCode) return null;
+  return OAUTH_ERROR_MESSAGES[errorCode] || OAUTH_ERROR_MESSAGES.Default;
+}
 
 function LoginFormContent() {
   const searchParams = useSearchParams();
   const tenantSlug = searchParams.get("tenant") || "";
+  const oauthError = searchParams.get("error");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [tenant, setTenant] = useState(tenantSlug);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Display OAuth errors from URL parameters
+  useEffect(() => {
+    const errorMessage = getOAuthErrorMessage(oauthError);
+    if (errorMessage) {
+      setError(errorMessage);
+    }
+  }, [oauthError]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,7 +71,14 @@ function LoginFormContent() {
       });
 
       if (result?.error) {
-        setError("Invalid email, password, or organization");
+        // Handle specific error cases
+        if (result.error === "OAuthOnlyUser") {
+          setError("This account uses Google sign-in. Please use the 'Sign in with Google' button above.");
+        } else if (result.error === "TenantSuspended") {
+          setError("This organization has been suspended. Please contact support.");
+        } else {
+          setError("Invalid email, password, or organization");
+        }
         setLoading(false);
         return;
       }
@@ -57,28 +101,36 @@ function LoginFormContent() {
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {error && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        <div className="space-y-2 mb-4">
+          <Label htmlFor="tenant">Organization</Label>
+          <Input
+            id="tenant"
+            type="text"
+            value={tenant}
+            onChange={(e) => setTenant(e.target.value)}
+            placeholder="your-organization"
+            required
+          />
+          <p className="text-xs text-muted-foreground">
+            Your organization subdomain
+          </p>
+        </div>
+
+        <GoogleAuthButton
+          mode="signin"
+          tenantSlug={tenant}
+          callbackUrl={tenant ? `/${tenant}/dashboard` : undefined}
+        />
+
+        <OAuthSeparator text="or continue with email" />
+
         <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          <div className="space-y-2">
-            <Label htmlFor="tenant">Organization</Label>
-            <Input
-              id="tenant"
-              type="text"
-              value={tenant}
-              onChange={(e) => setTenant(e.target.value)}
-              placeholder="your-organization"
-              required
-            />
-            <p className="text-xs text-muted-foreground">
-              Your organization subdomain
-            </p>
-          </div>
-
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input
